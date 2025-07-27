@@ -119,10 +119,6 @@ docker-compose.override.yml
 *.h5
 *.ckpt
 *.wav
-models/
-assets/cache/
-assets/models/
-uploads/
 
 # System files
 .DS_Store
