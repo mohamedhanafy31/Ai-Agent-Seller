@@ -1,0 +1,57 @@
+# AI Agent Seller Backend - Production Dependencies (Optimized)
+
+# Core FastAPI and server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.23
+psycopg2-binary>=2.9.7
+alembic>=1.12.1
+
+# Configuration and validation
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# Logging
+loguru>=0.7.2
+
+# HTTP client
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# AI/ML Models (install PyTorch separately to avoid conflicts)
+transformers>=4.35.0
+accelerate>=0.25.0
+
+# TTS
+TTS>=0.22.0
+
+# Computer Vision
+ultralytics>=8.0.200
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Audio Processing
+librosa>=0.10.1
+soundfile>=0.12.1
+numpy>=1.24.0
+
+# Utilities
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-json-logger>=2.0.7
+
+# Production Server
+gunicorn>=21.2.0
+
+# Performance Monitoring
+sentry-sdk[fastapi]>=1.32.0
+
+# Production Utilities
+redis>=5.0.0
+
+# Security
+cryptography>=41.0.0 
