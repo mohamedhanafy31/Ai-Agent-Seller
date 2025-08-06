@@ -62,6 +62,11 @@ RUN /opt/conda/envs/ai_seller/bin/pip install tts==0.22.0 --no-deps && \
     /opt/conda/envs/ai_seller/bin/pip install "numpy>=2.0.0,<2.3.0" && \
     /opt/conda/envs/ai_seller/bin/pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cpu
 
+# --- ADDITIONAL FIXES FOR MODEL IMPORT ERRORS ---
+# Ensure transformers and compatible numpy are installed last
+RUN /opt/conda/envs/ai_seller/bin/pip install --upgrade --force-reinstall numpy && \
+    /opt/conda/envs/ai_seller/bin/pip install --upgrade transformers
+
 # Stage 3: Final production image
 FROM base as production
 

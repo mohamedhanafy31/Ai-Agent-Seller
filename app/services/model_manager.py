@@ -37,23 +37,48 @@ class ModelManager:
         """Initialize all AI models."""
         logger.info("Starting model initialization...")
         
+        # Track which models failed to load
+        failed_models = []
+        
         try:
             # Initialize models in parallel where possible
-            await asyncio.gather(
+            results = await asyncio.gather(
                 self._load_whisper_model(),
                 self._load_tts_model(),
                 self._check_ollama_availability(),
                 return_exceptions=True
             )
             
-            # These require sequential loading due to dependencies
-            await self._load_tracking_models()
+            # Check results and log failures
+            model_names = ["whisper", "tts", "ollama"]
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to load {model_names[i]}: {str(result)}")
+                    failed_models.append(model_names[i])
+                    self._model_status[model_names[i]] = False
+                else:
+                    logger.info(f"✅ {model_names[i]} initialized successfully")
             
-            logger.info("All models initialized successfully")
+            # These require sequential loading due to dependencies
+            try:
+                await self._load_tracking_models()
+                logger.info("✅ Tracking models initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to load tracking models: {str(e)}")
+                failed_models.extend(["yolo", "tracker"])
+                self._model_status["yolo"] = False
+                self._model_status["tracker"] = False
+            
+            if failed_models:
+                logger.warning(f"⚠️ Some models failed to load: {failed_models}")
+                logger.info("Models will be loaded on first request")
+            else:
+                logger.info("✅ All models initialized successfully")
             
         except Exception as e:
             logger.error(f"Model initialization failed: {str(e)}")
-            raise ModelLoadError("Model initialization", {"error": str(e)})
+            # Don't raise - let the application start with degraded functionality
+            logger.warning("⚠️ Starting with degraded functionality - models will be loaded on first request")
     
     async def _load_whisper_model(self) -> None:
         """Load Whisper model for speech-to-text."""
@@ -71,11 +96,12 @@ class ModelManager:
             
             self._model_status["whisper"] = True
             logger.info("✅ Whisper model loaded successfully")
+            return None
             
         except Exception as e:
             self._model_status["whisper"] = False
             logger.error(f"❌ Failed to load Whisper model: {str(e)}")
-            raise ModelLoadError("Whisper", {"error": str(e)})
+            return e
     
     async def _load_tts_model(self) -> None:
         """Load XTTS-v2 model for text-to-speech."""
@@ -99,11 +125,12 @@ class ModelManager:
                 logger.warning(f"⚠️ Speaker reference file {settings.TTS_SPEAKER_WAV} not found")
             
             self._model_status["tts"] = True
+            return None
             
         except Exception as e:
             self._model_status["tts"] = False
             logger.error(f"❌ Failed to load TTS model: {str(e)}")
-            raise ModelLoadError("TTS", {"error": str(e)})
+            return e
     
     async def _load_tracking_models(self) -> None:
         """Load YOLO and BoostTrack models for person tracking."""
@@ -118,7 +145,7 @@ class ModelManager:
                 logger.warning(f"⚠️ YOLO model file {settings.YOLO_MODEL_PATH} not found")
                 self._model_status["yolo"] = False
                 self._model_status["tracker"] = False
-                return
+                return Exception(f"YOLO model file {settings.YOLO_MODEL_PATH} not found")
             
             # Load YOLO model
             from ultralytics import YOLO
@@ -131,12 +158,13 @@ class ModelManager:
             self._model_status["yolo"] = True
             self._model_status["tracker"] = True
             logger.info(f"✅ Tracking models loaded with: {settings.YOLO_MODEL_PATH}")
+            return None
             
         except Exception as e:
             self._model_status["yolo"] = False
             self._model_status["tracker"] = False
             logger.error(f"❌ Failed to load tracking models: {str(e)}")
-            raise ModelLoadError("Tracking", {"error": str(e)})
+            return e
     
     async def _check_ollama_availability(self) -> None:
         """Check if Ollama service is available."""
@@ -151,15 +179,18 @@ class ModelManager:
                         self.ollama_available = True
                         self._model_status["ollama"] = True
                         logger.info("✅ Ollama service is available")
+                        return None
                     else:
                         self.ollama_available = False
                         self._model_status["ollama"] = False
                         logger.warning("⚠️ Ollama service is not responding correctly")
+                        return Exception("Ollama service not responding correctly")
         
         except Exception as e:
             self.ollama_available = False
             self._model_status["ollama"] = False
             logger.warning(f"⚠️ Ollama not available: {str(e)}")
+            return e
     
     def get_model_status(self) -> Dict[str, Any]:
         """Get the status of all models."""

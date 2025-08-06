@@ -47,4 +47,45 @@ class AudioInfo(BaseModel):
     duration: Optional[float] = None
     sample_rate: Optional[int] = None
     channels: Optional[int] = None
-    format: Optional[str] = None 
+    format: Optional[str] = None
+
+
+class STTStreamingRequest(BaseModel):
+    """STT streaming request schema for WebSocket."""
+    audio_data: str = Field(..., description="Base64 encoded audio chunk")
+    chunk_index: int = Field(..., description="Sequential chunk number")
+    is_final: bool = Field(default=False, description="Whether this is the final chunk")
+    language: str = Field(default="ar", description="Target language for transcription")
+    sample_rate: int = Field(default=16000, description="Audio sample rate")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "audio_data": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
+                "chunk_index": 1,
+                "is_final": False,
+                "language": "ar",
+                "sample_rate": 16000
+            }
+        }
+
+
+class STTStreamingResponse(BaseModel):
+    """STT streaming response schema for WebSocket."""
+    type: str = Field(..., description="Response type: 'partial', 'final', 'error'")
+    text: str = Field(default="", description="Transcribed text (partial or complete)")
+    chunk_index: int = Field(..., description="Chunk index being processed")
+    confidence: Optional[float] = Field(None, ge=0, le=1, description="Transcription confidence")
+    is_final: bool = Field(default=False, description="Whether this is the final result")
+    message: Optional[str] = Field(None, description="Error message if type='error'")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "type": "partial",
+                "text": "أريد شراء",
+                "chunk_index": 1,
+                "confidence": 0.85,
+                "is_final": False
+            }
+        } 

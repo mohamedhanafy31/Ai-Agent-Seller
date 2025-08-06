@@ -5,7 +5,9 @@ Speech-to-Text Service - Business logic for Arabic speech recognition.
 import time
 import tempfile
 import os
-from typing import Optional
+import base64
+import io
+from typing import Optional, AsyncGenerator
 from pathlib import Path
 
 import soundfile as sf
@@ -13,7 +15,10 @@ import librosa
 import numpy as np
 from loguru import logger
 
-from app.schemas.stt import TranscriptionRequest, TranscriptionResponse, AudioInfo
+from app.schemas.stt import (
+    TranscriptionRequest, TranscriptionResponse, AudioInfo,
+    STTStreamingRequest, STTStreamingResponse
+)
 from app.services.model_manager import ModelManager
 from app.core.config import get_settings
 from app.core.exceptions import AudioProcessingError, ModelLoadError
@@ -27,6 +32,10 @@ class STTService:
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
         self.settings = settings
+        # Buffer for streaming audio chunks
+        self.audio_buffer = []
+        self.accumulated_audio = np.array([])
+        self.sample_rate = 16000
     
     async def transcribe_audio(
         self, 
@@ -191,4 +200,159 @@ class STTService:
             return await self._process_audio_file(file_path)
         except Exception as e:
             logger.error(f"Get audio info failed: {str(e)}")
-            raise AudioProcessingError("audio info", {"error": str(e)}) 
+            raise AudioProcessingError("audio info", {"error": str(e)})
+    
+    async def process_audio_chunk(self, request: STTStreamingRequest) -> STTStreamingResponse:
+        """Process a streaming audio chunk and return partial/final transcription."""
+        try:
+            # Validate model availability
+            if not self.model_manager.is_model_available("whisper"):
+                return STTStreamingResponse(
+                    type="error",
+                    chunk_index=request.chunk_index,
+                    message="Whisper model not available"
+                )
+            
+            # Decode base64 audio data
+            try:
+                audio_bytes = base64.b64decode(request.audio_data)
+            except Exception as e:
+                return STTStreamingResponse(
+                    type="error",
+                    chunk_index=request.chunk_index,
+                    message=f"Invalid base64 audio data: {str(e)}"
+                )
+            
+            # Convert bytes to numpy array
+            try:
+                audio_chunk = self._bytes_to_audio(audio_bytes, request.sample_rate)
+            except Exception as e:
+                return STTStreamingResponse(
+                    type="error",
+                    chunk_index=request.chunk_index,
+                    message=f"Audio conversion failed: {str(e)}"
+                )
+            
+            # Accumulate audio data
+            if len(self.accumulated_audio) == 0:
+                self.accumulated_audio = audio_chunk
+            else:
+                self.accumulated_audio = np.concatenate([self.accumulated_audio, audio_chunk])
+            
+            # Process transcription
+            if request.is_final or len(self.accumulated_audio) >= request.sample_rate * 2:  # At least 2 seconds
+                result = await self._transcribe_audio_array(
+                    self.accumulated_audio, 
+                    request.sample_rate, 
+                    request.language
+                )
+                
+                response_type = "final" if request.is_final else "partial"
+                
+                # Reset buffer if final
+                if request.is_final:
+                    self.accumulated_audio = np.array([])
+                
+                return STTStreamingResponse(
+                    type=response_type,
+                    text=result["text"],
+                    chunk_index=request.chunk_index,
+                    confidence=result.get("confidence"),
+                    is_final=request.is_final
+                )
+            else:
+                # Not enough audio for transcription yet
+                return STTStreamingResponse(
+                    type="partial",
+                    text="",
+                    chunk_index=request.chunk_index,
+                    confidence=0.0,
+                    is_final=False
+                )
+                
+        except Exception as e:
+            logger.error(f"Streaming transcription failed: {str(e)}")
+            return STTStreamingResponse(
+                type="error",
+                chunk_index=request.chunk_index,
+                message=f"Processing failed: {str(e)}"
+            )
+    
+    def _bytes_to_audio(self, audio_bytes: bytes, sample_rate: int) -> np.ndarray:
+        """Convert audio bytes to numpy array."""
+        try:
+            # Try to read as WAV first
+            with io.BytesIO(audio_bytes) as audio_io:
+                audio_data, sr = sf.read(audio_io)
+                
+                # Resample if needed
+                if sr != sample_rate:
+                    audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=sample_rate)
+                
+                # Ensure mono
+                if len(audio_data.shape) > 1:
+                    audio_data = np.mean(audio_data, axis=1)
+                
+                return audio_data.astype(np.float32)
+                
+        except Exception as e:
+            # Fallback: assume raw PCM data
+            try:
+                audio_data = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+                return audio_data
+            except Exception as fallback_error:
+                logger.error(f"Audio conversion failed: {str(e)}, fallback failed: {str(fallback_error)}")
+                raise AudioProcessingError("audio conversion", {"error": str(e)})
+    
+    async def _transcribe_audio_array(self, audio_data: np.ndarray, sample_rate: int, language: str) -> dict:
+        """Transcribe audio numpy array using Whisper."""
+        try:
+            # Save audio array to temporary file for Whisper
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                sf.write(temp_file.name, audio_data, sample_rate)
+                temp_path = temp_file.name
+            
+            try:
+                # Preprocess audio for better results
+                processed_path = await self._preprocess_audio(temp_path)
+                
+                # Transcribe using Whisper
+                result = self.model_manager.whisper_model(
+                    processed_path,
+                    generate_kwargs={"language": language}
+                )
+                
+                # Clean up files
+                if processed_path != temp_path:
+                    try:
+                        os.unlink(processed_path)
+                    except:
+                        pass
+                
+                # Extract confidence if available
+                confidence = None
+                if hasattr(result, 'confidence'):
+                    confidence = result.confidence
+                elif isinstance(result, dict) and 'confidence' in result:
+                    confidence = result['confidence']
+                
+                return {
+                    "text": result["text"].strip(),
+                    "confidence": confidence
+                }
+                
+            finally:
+                # Clean up temp file
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            logger.error(f"Array transcription failed: {str(e)}")
+            raise AudioProcessingError("array transcription", {"error": str(e)})
+    
+    def reset_streaming_buffer(self):
+        """Reset the streaming audio buffer."""
+        self.accumulated_audio = np.array([])
+        self.audio_buffer = [] 

@@ -467,6 +467,62 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Health check failed")
 
 
+@app.get(
+    "/websocket-docs",
+    summary="WebSocket Endpoints Documentation",
+    description="Documentation for WebSocket endpoints that are not visible in Swagger UI",
+    tags=["system"]
+)
+async def websocket_documentation():
+    """
+    ## WebSocket Endpoints Documentation
+    
+    This endpoint provides documentation for WebSocket connections that are not 
+    visible in the standard Swagger UI documentation.
+    
+    ### Available WebSocket Endpoints:
+    """
+    return {
+        "websocket_endpoints": [
+            {
+                "path": "/api/v1/tts/stream",
+                "description": "Real-time TTS audio streaming",
+                "protocol": "WebSocket",
+                "url": "ws://localhost:8000/api/v1/tts/stream",
+                "usage": {
+                    "connection": "const ws = new WebSocket('ws://localhost:8000/api/v1/tts/stream')",
+                    "send_format": {
+                        "text": "Text to synthesize",
+                        "language": "ar",
+                        "chunk_size": 1024
+                    },
+                    "receive_format": {
+                        "type": "audio_chunk|complete|error",
+                        "data": "base64_encoded_audio_data",
+                        "chunk_index": 0
+                    }
+                },
+                "example": {
+                    "send": {
+                        "text": "مرحباً بكم في متجرنا",
+                        "language": "ar",
+                        "chunk_size": 1024
+                    },
+                    "receive": {
+                        "type": "audio_chunk",
+                        "data": "UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT...",
+                        "chunk_index": 0
+                    }
+                }
+            }
+        ],
+        "note": "WebSocket endpoints are not visible in Swagger UI but are fully functional",
+        "testing": {
+            "browser_console": "const ws = new WebSocket('ws://localhost:8000/api/v1/tts/stream'); ws.onopen = () => ws.send(JSON.stringify({text: 'مرحبا', language: 'ar'})); ws.onmessage = (e) => console.log(e.data);"
+        }
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     
