@@ -85,6 +85,59 @@ confidence_threshold: 0.5
 
 </details>
 
+#### 🧪 **Postman Testing Example**
+
+<details>
+<summary><b>📮 Step-by-Step Postman Setup</b></summary>
+
+**🔧 Upload Video for Tracking:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/tracking/upload`
+3. **Headers:** 
+   - `Content-Type`: `multipart/form-data` (auto-set)
+4. **Body → form-data:**
+   - Key: `file` | Type: `File` | Value: Upload a `.mp4` video file
+   - Key: `confidence_threshold` | Type: `Text` | Value: `0.5`
+   - Key: `max_persons` | Type: `Text` | Value: `10`
+
+**📤 Expected Response:**
+```json
+{
+  "session_id": "track_abc123",
+  "status": "uploaded",
+  "filename": "video.mp4",
+  "file_size": 2048576
+}
+```
+
+**🔧 Process Video Tracking:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/tracking/process/{session_id}`
+   - Replace `{session_id}` with the session_id from upload response
+3. **Body → form-data:**
+   - Key: `confidence_threshold` | Type: `Text` | Value: `0.25`
+   - Key: `max_tracks` | Type: `Text` | Value: `100`
+
+**📤 Expected Response:**
+```json
+{
+  "session_id": "track_abc123",
+  "status": "completed",
+  "persons_detected": 2,
+  "processing_time": 5.2,
+  "tracks": [
+    {
+      "track_id": 1,
+      "person_id": "person_001",
+      "confidence": 0.89,
+      "frames_tracked": 120
+    }
+  ]
+}
+```
+
+</details>
+
 #### 🎮 **Unity Implementation**
 ```csharp
 using UnityEngine;
@@ -201,6 +254,57 @@ public class TrackingResult
 
 </details>
 
+#### 🧪 **Postman Testing Example**
+
+<details>
+<summary><b>📮 TTS WebSocket Testing (Advanced)</b></summary>
+
+**⚠️ Note:** Postman WebSocket support is limited. For full testing, use a WebSocket client or the Unity implementation.
+
+**🔧 Alternative: Test TTS Batch Endpoint:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/tts/synthesize`
+3. **Headers:**
+   - `Content-Type`: `application/json`
+4. **Body → raw (JSON):**
+```json
+{
+  "text": "اهلا بيك تعالي",
+  "language": "ar",
+  "speed": 1.0,
+  "voice": "default"
+}
+```
+
+**📤 Expected Response:**
+```json
+{
+  "audio_url": "/audio/output_12345.wav",
+  "duration": 2.8,
+  "sample_rate": 22050,
+  "processing_time": 0.8
+}
+```
+
+**🎵 Test Audio Playback:**
+- Copy the `audio_url` from response
+- Open: `http://localhost:8000/audio/output_12345.wav` in browser
+- Should play Arabic greeting audio
+
+**🔧 WebSocket Testing (Using WebSocket Client):**
+- **URL:** `ws://localhost:8000/api/v1/tts/stream`
+- **Send Message:**
+```json
+{
+  "text": "اهلا بيك تعالي",
+  "language": "ar",
+  "chunk_size": 1024
+}
+```
+- **Receive:** Base64 audio chunks in real-time
+
+</details>
+
 #### 🎮 **Unity Implementation**
 ```csharp
 using UnityEngine;
@@ -232,10 +336,10 @@ public class TTSManager : MonoBehaviour
             var request = new TTSRequest
             {
                 text = "اهلا بيك تعالي",
-                language = "ar",
-                chunk_size = 1024
-            };
-            
+            language = "ar",
+            chunk_size = 1024
+        };
+        
             string json = JsonUtility.ToJson(request);
             await ttsWebSocket.SendText(json);
         }
@@ -335,6 +439,64 @@ public class TTSResponse
   "is_final": true
 }
 ```
+
+#### 🧪 **Postman Testing Example**
+
+<details>
+<summary><b>📮 STT WebSocket Testing (Advanced)</b></summary>
+
+**⚠️ Note:** Postman WebSocket support is limited. For full testing, use a WebSocket client or the Unity implementation.
+
+**🔧 Alternative: Test STT Batch Endpoint:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/stt/transcribe`
+3. **Headers:**
+   - `Content-Type`: `multipart/form-data` (auto-set)
+4. **Body → form-data:**
+   - Key: `file` | Type: `File` | Value: Upload a `.wav` or `.mp3` audio file
+   - Key: `language` | Type: `Text` | Value: `ar`
+
+**📤 Expected Response:**
+```json
+{
+  "transcription": "أريد شراء قميص أزرق للعمل",
+  "language": "ar",
+  "confidence": 0.94,
+  "processing_time": 2.1,
+  "audio_duration": 3.5
+}
+```
+
+**🔧 WebSocket Testing (Using WebSocket Client):**
+- **URL:** `ws://localhost:8000/api/v1/stt/stream`
+- **Send Message (Audio Chunk):**
+```json
+{
+  "audio_data": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
+  "chunk_index": 1,
+  "is_final": false,
+  "language": "ar",
+  "sample_rate": 16000
+}
+```
+- **Send Final Message:**
+```json
+{
+  "audio_data": "",
+  "chunk_index": 2,
+  "is_final": true,
+  "language": "ar",
+  "sample_rate": 16000
+}
+```
+- **Receive:** Partial and final transcription responses
+
+**🎤 Audio Requirements:**
+- Format: WAV, MP3, or base64 encoded
+- Sample Rate: 16000 Hz recommended
+- Language: Arabic (`ar`) for this flow
+
+</details>
 
 **Unity Example:**
 ```csharp
@@ -534,6 +696,87 @@ include_engagement: true
 }
 ```
 
+#### 🧪 **Postman Testing Example**
+
+<details>
+<summary><b>📮 Person Status Analysis Testing</b></summary>
+
+**🔧 Test Person Status Analysis:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/status/analyze`
+3. **Headers:**
+   - `Content-Type`: `multipart/form-data` (auto-set)
+4. **Body → form-data:**
+   - Key: `file` | Type: `File` | Value: Upload a `.jpg` or `.png` image with a person
+   - Key: `include_demographics` | Type: `Text` | Value: `true`
+   - Key: `include_emotions` | Type: `Text` | Value: `true`
+   - Key: `include_engagement` | Type: `Text` | Value: `true`
+   - Key: `confidence_threshold` | Type: `Text` | Value: `0.5`
+   - Key: `analysis_depth` | Type: `Text` | Value: `detailed`
+
+**📤 Expected Response:**
+```json
+{
+  "person_id": "person_abc123",
+  "demographics": {
+    "age_range": "25-35",
+    "gender": "female",
+    "appearance": {
+      "clothing_style": "casual",
+      "dominant_colors": ["blue", "white"]
+    }
+  },
+  "emotions": {
+    "primary_emotion": "interested",
+    "emotion_confidence": 0.88,
+    "secondary_emotions": ["happy", "curious"]
+  },
+  "engagement": {
+    "attention_level": 0.92,
+    "interest_score": 0.85,
+    "engagement_duration": 5.2
+  },
+  "analysis_metadata": {
+    "processing_time": 1.2,
+    "model_version": "gemma3-vlm",
+    "confidence_score": 0.89
+  }
+}
+```
+
+**🔧 Alternative: Test Camera Capture Endpoint:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/status/capture`
+3. **Body → raw (JSON):**
+```json
+{
+  "camera_id": "default",
+  "resolution": "640x480",
+  "include_analysis": true
+}
+```
+
+**📤 Expected Response:**
+```json
+{
+  "image_url": "/uploads/captured_frame_12345.jpg",
+  "analysis": {
+    "person_detected": true,
+    "person_count": 1,
+    "primary_emotion": "interested"
+  },
+  "capture_timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+**🖼️ Image Requirements:**
+- Format: JPG, PNG supported
+- Resolution: 640x480 minimum recommended
+- Content: Clear view of person's face and upper body
+- Lighting: Well-lit scene for better analysis
+
+</details>
+
 **Unity Example:**
 ```csharp
 using UnityEngine;
@@ -675,6 +918,96 @@ Content-Type: application/json
   "confidence": 0.95
 }
 ```
+
+#### 🧪 **Postman Testing Example**
+
+<details>
+<summary><b>📮 Context-Aware Chat Testing</b></summary>
+
+**🔧 Test Regular Chat Message:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/chat/message`
+3. **Headers:**
+   - `Content-Type`: `application/json`
+4. **Body → raw (JSON):**
+```json
+{
+  "message": "Customer said: 'أريد شراء قميص أزرق للعمل'\n\nCustomer status:\n- Age: 25-35\n- Gender: female\n- Emotion: interested (0.88)\n- Engagement: 0.92 attention\n\nPlease provide a personalized Arabic response.",
+  "session_id": "sess_123",
+  "context": {
+    "customer_transcription": "أريد شراء قميص أزرق للعمل",
+    "person_status": {
+      "age_range": "25-35",
+      "gender": "female",
+      "emotion": "interested",
+      "engagement": 0.92
+    }
+  }
+}
+```
+
+**📤 Expected Response:**
+```json
+{
+  "response": "مرحباً! أرى أنك مهتمة بقميص أزرق للعمل. بناءً على أسلوبك العملي، أنصحك بقميص قطني كلاسيكي أزرق فاتح - مريح وأنيق للعمل. ما رأيك؟",
+  "session_id": "sess_123",
+  "processing_time": 2.1,
+  "confidence": 0.95,
+  "context_used": true,
+  "recommendations": [
+    {
+      "product": "Blue Cotton Work Shirt",
+      "price": "120 SAR",
+      "confidence": 0.89
+    }
+  ]
+}
+```
+
+**🔧 Test Streaming Chat (SSE):**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/chat/stream`
+3. **Headers:**
+   - `Content-Type`: `application/json`
+   - `Accept`: `text/event-stream`
+4. **Body → raw (JSON):**
+```json
+{
+  "message": "أريد شراء حذاء رياضي للجري",
+  "session_id": "sess_456"
+}
+```
+
+**📤 Expected SSE Stream:**
+```
+data: {"type": "start", "session_id": "sess_456"}
+
+data: {"type": "token", "content": "مرحباً", "session_id": "sess_456"}
+
+data: {"type": "token", "content": "!", "session_id": "sess_456"}
+
+data: {"type": "token", "content": " أرى", "session_id": "sess_456"}
+
+data: {"type": "complete", "full_response": "مرحباً! أرى أنك تبحث عن حذاء رياضي للجري...", "session_id": "sess_456"}
+```
+
+**🔧 Simple Chat Test:**
+1. **Method:** `POST`
+2. **URL:** `http://localhost:8000/api/v1/chat/message`
+3. **Body → raw (JSON):**
+```json
+{
+  "message": "مرحبا، كيف يمكنني مساعدتك؟",
+  "session_id": "test_session"
+}
+```
+
+**🗣️ Message Requirements:**
+- Language: Arabic or English supported
+- Context: Include person status for better responses
+- Session: Use consistent session_id for conversation flow
+
+</details>
 
 **Unity Example:**
 ```csharp
@@ -847,6 +1180,132 @@ private void ResetForNextCustomer()
     GetComponent<PersonTracker>().StartCoroutine(GetComponent<PersonTracker>().DetectPerson());
 }
 ```
+
+---
+
+## 🧪 **Complete Postman Testing Collection**
+
+### **📦 Postman Collection Summary**
+
+<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px; margin: 10px 0;">
+
+**🔧 Essential Testing Endpoints:**
+
+| **Step** | **Endpoint** | **Method** | **Purpose** | **Test File** |
+|----------|--------------|------------|-------------|---------------|
+| 1 | `/api/v1/tracking/upload` | POST | Upload video for person detection | Video file (MP4) |
+| 1 | `/api/v1/tracking/process/{id}` | POST | Process uploaded video | Session ID from upload |
+| 2 | `/api/v1/tts/synthesize` | POST | Generate greeting audio | Arabic text |
+| 3 | `/api/v1/stt/transcribe` | POST | Transcribe customer speech | Audio file (WAV/MP3) |
+| 4 | `/api/v1/status/analyze` | POST | Analyze person status | Image file (JPG/PNG) |
+| 5 | `/api/v1/chat/message` | POST | Get LLM response | JSON message |
+| 6 | `/api/v1/tts/synthesize` | POST | Generate response audio | Arabic response text |
+
+</div>
+
+### **🚀 Quick Test Sequence**
+
+<details>
+<summary><b>📋 Step-by-Step Testing Guide</b></summary>
+
+**🎯 Complete Flow Test (5 minutes):**
+
+1. **🎥 Test Person Detection:**
+   ```bash
+   POST http://localhost:8000/api/v1/tracking/upload
+   # Upload: sample_video.mp4, confidence_threshold: 0.5
+   # Expected: session_id returned
+   ```
+
+2. **🎵 Test Greeting Audio:**
+   ```bash
+   POST http://localhost:8000/api/v1/tts/synthesize
+   # Body: {"text": "اهلا بيك تعالي", "language": "ar"}
+   # Expected: audio_url returned, test playback
+   ```
+
+3. **🎤 Test Speech Recognition:**
+   ```bash
+   POST http://localhost:8000/api/v1/stt/transcribe
+   # Upload: arabic_speech.wav, language: ar
+   # Expected: Arabic transcription returned
+   ```
+
+4. **👁️ Test Person Analysis:**
+   ```bash
+   POST http://localhost:8000/api/v1/status/analyze
+   # Upload: person_image.jpg, include_demographics: true
+   # Expected: person status with emotions/demographics
+   ```
+
+5. **🧠 Test Context-Aware Chat:**
+   ```bash
+   POST http://localhost:8000/api/v1/chat/message
+   # Body: Combined transcription + person status
+   # Expected: Personalized Arabic response
+   ```
+
+6. **🔊 Test Response Audio:**
+   ```bash
+   POST http://localhost:8000/api/v1/tts/synthesize
+   # Body: {"text": "[LLM Response]", "language": "ar"}
+   # Expected: Response audio generated
+   ```
+
+</details>
+
+### **📁 Required Test Files**
+
+<div style="background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 20px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #3182ce;">
+
+**🎬 Video Files:**
+- `sample_video.mp4` - Video with person for tracking (3-10 seconds)
+- Resolution: 640x480 minimum
+
+**🎤 Audio Files:**
+- `arabic_speech.wav` - Arabic speech sample for STT
+- Format: WAV, 16kHz sample rate preferred
+- Duration: 3-5 seconds of clear Arabic speech
+
+**🖼️ Image Files:**
+- `person_image.jpg` - Clear image of person's face/upper body
+- Resolution: 640x480 minimum
+- Good lighting for better analysis
+
+**📝 Sample Data:**
+- Arabic text samples for TTS testing
+- Context-aware message templates
+- Session IDs for flow continuity
+
+</div>
+
+### **⚠️ WebSocket Testing Notes**
+
+<div style="background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%); padding: 20px; border-radius: 10px; margin: 10px 0; border-left: 4px solid #e53e3e;">
+
+**🔌 WebSocket Limitations in Postman:**
+- Postman has limited WebSocket support
+- Use alternative tools for real-time testing:
+  - **WebSocket King** (Browser extension)
+  - **Insomnia** (Full WebSocket support)
+  - **Unity Implementation** (Recommended)
+
+**🔗 WebSocket URLs:**
+- STT: `ws://localhost:8000/api/v1/stt/stream`
+- TTS: `ws://localhost:8000/api/v1/tts/stream`
+
+</div>
+
+### **✅ Expected Response Codes**
+
+| **Scenario** | **HTTP Code** | **Description** |
+|--------------|---------------|-----------------|
+| Successful upload | `200 OK` | File uploaded and processed |
+| Successful analysis | `200 OK` | Analysis completed |
+| Invalid file format | `400 Bad Request` | Unsupported file type |
+| Missing file | `422 Unprocessable Entity` | Required file not provided |
+| Server processing error | `500 Internal Server Error` | AI model processing failed |
+| Model not loaded | `503 Service Unavailable` | AI models not ready |
 
 ---
 
